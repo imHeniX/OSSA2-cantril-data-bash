@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# Best Predictor Script
+# Author: Yadhu
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <cleaned_data_file>"
+    exit 1
+fi
+
+data_file="$1"
+
+
+# function to calculate pearson's correlation coeffcient using the specified columns from the input datafile
+calculate_correlation() {
+    local predictor_column="$1"
+    local data_file="$2"
+
+    awk -F'\t' -v predictor_column="$predictor_column" '
+    BEGIN {
+        sum_x = sum_y = sum_xy = sum_x_squared = sum_y_squared = 0
+        n = 0
+    }
+    {
+        predictor_value = $predictor_column
+        ladder_score = $8
+        sum_x += predictor_value
+        sum_y += ladder_score
+        sum_xy += predictor_value * ladder_score
+        sum_x_squared += predictor_value * predictor_value
+        sum_y_squared += ladder_score * ladder_score
+        n++
+    }
+    END {
+        if (n > 1) {
+            numerator = sum_xy - (sum_x * sum_y / n)
+            denominator = sqrt((sum_x_squared - sum_x^2 / n) * (sum_y_squared - sum_y^2 / n))
+            if (denominator != 0) {
+                print numerator / denominator
+            } else {
+                print 0
+            }
+        } else {
+            print 0
+        }
+    }' "$data_file"
+}
+
+
+gdp_correlation=$(calculate_correlation 4 "$data_file")
+population_correlation=$(calculate_correlation 5 "$data_file")
+homicide_correlation=$(calculate_correlation 6 "$data_file")
+life_expectancy_correlation=$(calculate_correlation 7 "$data_file")
+
+best_predictor=""
+best_correlation=0
+
+# comparing the different correlations to get the best predictor
+for correlation in "$gdp_correlation" "$population_correlation" "$homicide_correlation" "$life_expectancy_correlation"; do
+    if (( $(echo "$correlation < 0" | bc -l) )); then
+        correlation=$(echo "$correlation * -1" | bc)
+    fi
+    if (( $(echo "$correlation > $best_correlation" | bc -l) )); then
+        best_correlation="$correlation"
+        case "$correlation" in
+            "$gdp_correlation") best_predictor="GDP per capita" ;;
+            "$population_correlation") best_predictor="Population" ;;
+            "$homicide_correlation") best_predictor="Homicide Rate" ;;
+            "$life_expectancy_correlation") best_predictor="Life Expectancy" ;;
+        esac
+    fi
+done
+
+#output to console
+echo "Mean correlation of GDP with Cantril ladder is $gdp_correlation"
+echo "Mean correlation of Population with Cantril ladder is $population_correlation"
+echo "Mean correlation of Homicide Rate with Cantril ladder is $homicide_correlation"
+echo "Mean correlation of Life Expectancy with Cantril ladder is $life_expectancy_correlation"
+echo ""
+echo "Most predictive mean correlation with the Cantril ladder is $best_predictor (r = $best_correlation)"
